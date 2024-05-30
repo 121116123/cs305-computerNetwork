@@ -10,8 +10,10 @@ toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
 fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
 toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 
-sender_address = ("10.16.56.14", 12344)         # Your sender address
-receiver_address = ("10.16.56.14", 12349)       # Your receiver address
+# sender_address = ("10.16.56.14", 12344)         # Your sender address
+# receiver_address = ("10.16.56.14", 12349)       # Your receiver address
+sender_address = ("127.0.0.1", 12344)         # Your sender address
+receiver_address = ("127.0.0.1", 12349)       # Your receiver address
 
 num_test_case = 7
 
@@ -19,7 +21,7 @@ def test_case():
     sender_sock = None
     reciever_sock = None
     # TODO: You could change the range of this loop to test specific case(s).
-    for i in range(num_test_case):
+    for i in range(1,num_test_case):
         if sender_sock:
             del sender_sock
         if reciever_sock:
@@ -67,30 +69,37 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
     #############################################################################
     # An example to assign proxy server destination
     sock.proxy_server_addr = ("10.16.52.94", 12345)
+    print("Sender: Binding source address...")
     #############################################################################
     sock.bind(source_address)
+    print("Sender: Binding completed")
+    print("Sender: Connecting to target address...")
     sock.connect(target_address)
+    print("Sender: Connection established")
     time.sleep(1)
     if test_case > 3:
         try:
             with open(file_path, 'rb') as file:
                 while True:
-                    block = file.read(1024) 
+                    block = file.read(1024)
                     if not block:
                         break
-                    data_blocks.append(block.decode())  
-            # all_data = b''.join(data_blocks)
+                    data_blocks.append(block.decode())
+                    # all_data = b''.join(data_blocks)
             all_data = ''.join(data_blocks)
             # return all_data
         except IOError as e:
             print(f"An error occurred: {e}")
         # TODO: it should be modified to sock.send(data = all_data)
+        print("Sender: Sending data...")
         sock.send(data=all_data, test_case=test_case)
+        print("Sender: Data sent")
     if test_case >= 1 and test_case <= 3:
         data = "Short Message test"
+        print("Sender: Sending short message...")
         sock.send(data=data, test_case=test_case)
+        print("Sender: Short message sent")
     sock.close()
-
 
 def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     """
@@ -107,8 +116,11 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     #############################################################################
     # An example to assign proxy server destination
     sock.proxy_server_addr = ("10.16.52.94", 12347)
+    print("Receiver: Binding source address...")
     #############################################################################
     sock.bind(source_address)
+    print("Receiver: Binding completed")
+    print("Receiver: Accepting connection...")
     server_sock = sock.accept()
     if test_case >= 1 and test_case <= 3:
         data, _ = server_sock.recv()
