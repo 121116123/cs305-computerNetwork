@@ -21,7 +21,7 @@ def test_case():
     sender_sock = None
     reciever_sock = None
     # TODO: You could change the range of this loop to test specific case(s).
-    for i in range(4,num_test_case):
+    for i in range(0,num_test_case):
         if sender_sock:
             del sender_sock
         if reciever_sock:
@@ -122,22 +122,21 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     print("Receiver: Binding completed")
     print("Receiver: Accepting connection...")
     server_sock = sock.accept()
-    if test_case >= 1 and test_case <= 3:
+    if test_case >= 0 and test_case <= 3:
+        # Short message test cases
         data, _ = server_sock.recv()
+        print("Receiver: Received message:", data)
+        server_sock.recv()
     elif test_case > 3:
-        received_data = b''
-        while True:
-            data, _ = server_sock.recv()
-            if not data:
-                # Connection closed by sender
-                break
-            # received_data += data
-            # file.write(data)
-            #############################################################################
-            # TODO: Save all data to the file, and stop this loop when the client
-            #       close the connection.
-            # break
-            #############################################################################
+        # File transmission test cases
+        with open('transmit.txt', 'w') as file:
+            while True:
+                data, _ = server_sock.recv()
+                if not data:
+                    # Connection closed by sender
+                    break
+                file.write(data)
+        print("Receiver: File received and saved as transmit.txt")
         #############################################################################
         # TODO: You could use the following function to verify the file that you received.
         #       e.g. The original file is original.txt. The file you received has been stored

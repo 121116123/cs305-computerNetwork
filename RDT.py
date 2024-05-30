@@ -197,11 +197,10 @@ class RDTSocket():
 
                     # Wait for a short time to make sure the other party receives the FIN
                     time.sleep(1)
-
-                    # Perform closing operations or signal upper layer for closing
-                    # return None, None  # Signal upper layer to close connection
                     self.close_event.set()
-                    break
+                    # Perform closing operations or signal upper layer for closing
+                    return None, None  # Signal upper layer to close connection
+                    # break
                 elif self.is_packet_valid(recv_header):
                     if recv_header.SEQ_num == self.expected_seq_num:
                         print(f"Expected packet received: SEQ_num={recv_header.SEQ_num}")
@@ -209,6 +208,7 @@ class RDTSocket():
                         self.header.ACK = 1
                         self.header.SEQ_num = recv_header.SEQ_num
                         self.sock.sendto(self.header.to_bytes(), addr)
+                        print("\nrecv back ",recv_header.PAYLOAD,addr)
                         return recv_header.PAYLOAD, addr
                     else:
                         print(f"Unexpected SEQ_num: {recv_header.SEQ_num}. Expected: {self.expected_seq_num}")
