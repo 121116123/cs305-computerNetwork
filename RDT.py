@@ -20,11 +20,12 @@ class RDTSocket():
         self.close_event = multiprocessing.Event()
         self.ack_event = multiprocessing.Event()
         self.timeout = 1  # Timeout for retransmissions
+        self.expected_seq_num = 0
 
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        pass
+        # pass
     
     def bind(self, address: (str, int)): # type: ignore
         """
@@ -77,8 +78,9 @@ class RDTSocket():
 
         # Create new RDTSocket instance for the connection
         conn = RDTSocket()
-        conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.peer_address = self.peer_address
+        conn.sock=self.sock
         return conn
 
     def connect(self, address: (str, int)):  # type: ignore
@@ -160,34 +162,48 @@ class RDTSocket():
         #############################################################################
         # raise NotImplementedError()
 
+                                                 #
+
     def recv(self):
         """
-        You should implement the basic logic for receiving data in this function, and
-        verify the data. When corrupted or missing data packets are detected, a request
-        for retransmission should be sent to the other party.
+        This function receives data, verifies it, and sends an ACK back to the sender.
+        If corrupted or missing data packets are detected, a request for retransmission
+        should be sent to the other party.
 
-        This function should be bolcking.
+        This function is blocking.
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
         while True:
             print("Waiting to receive data...")
             data, addr = self.sock.recvfrom(1024)
             print("Data received:", data)
+
             if data:
                 recv_header = RDTHeader()
                 recv_header.from_bytes(data)
                 print("Received header:", recv_header)
-                if recv_header.ACK == 1:
-                    print("ACK received, returning payload")
-                    return recv_header.PAYLOAD
+
+                if self.is_packet_valid(recv_header):
+                    if recv_header.SEQ_num == self.expected_seq_num:
+                        print(f"Expected packet received: SEQ_num={recv_header.SEQ_num}")
+                        self.expected_seq_num += 1
+                        self.header.ACK = 1
+                        self.header.SEQ_num = recv_header.SEQ_num
+                        self.sock.sendto(self.header.to_bytes(), addr)
+                        return recv_header.PAYLOAD, addr
+                    else:
+                        print(f"Unexpected SEQ_num: {recv_header.SEQ_num}. Expected: {self.expected_seq_num}")
                 else:
                     print("Packet corrupted, requesting retransmission")
-                    self.header.ACK = 1
-                    self.header.SEQ_num = recv_header.SEQ_num
-                    self.sock.sendto(self.header.to_bytes(), self.peer_address)
-        #############################################################################
-        # raise NotImplementedError()
+
+                # Send ACK for the last correctly received packet
+                self.header.ACK = 1
+                self.header.SEQ_num = self.expected_seq_num - 1
+                self.sock.sendto(self.header.to_bytes(), addr)
+
+    def is_packet_valid(self, header):
+        # Implement your packet validation logic here (e.g., checksum)
+        # This is a placeholder for actual validation logic
+        return True
 
     def close(self):
         """
