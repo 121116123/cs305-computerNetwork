@@ -21,7 +21,7 @@ def test_case():
     sender_sock = None
     reciever_sock = None
     # TODO: You could change the range of this loop to test specific case(s).
-    for i in range(1,num_test_case):
+    for i in range(4,num_test_case):
         if sender_sock:
             del sender_sock
         if reciever_sock:
@@ -125,12 +125,18 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     if test_case >= 1 and test_case <= 3:
         data, _ = server_sock.recv()
     elif test_case > 3:
+        received_data = b''
         while True:
             data, _ = server_sock.recv()
+            if not data:
+                # Connection closed by sender
+                break
+            # received_data += data
+            # file.write(data)
             #############################################################################
             # TODO: Save all data to the file, and stop this loop when the client
             #       close the connection.
-            break
+            # break
             #############################################################################
         #############################################################################
         # TODO: You could use the following function to verify the file that you received.

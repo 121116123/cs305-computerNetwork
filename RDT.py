@@ -1,5 +1,7 @@
 import multiprocessing
 import socket
+import time
+
 from Header import RDTHeader
 
 
@@ -81,6 +83,7 @@ class RDTSocket():
         # conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.peer_address = self.peer_address
         conn.sock=self.sock
+        print("accepted")
         return conn
 
     def connect(self, address: (str, int)):  # type: ignore
@@ -162,8 +165,6 @@ class RDTSocket():
         #############################################################################
         # raise NotImplementedError()
 
-                                                 #
-
     def recv(self):
         """
         This function receives data, verifies it, and sends an ACK back to the sender.
@@ -176,13 +177,32 @@ class RDTSocket():
             print("Waiting to receive data...")
             data, addr = self.sock.recvfrom(1024)
             print("Data received:", data)
-
             if data:
                 recv_header = RDTHeader()
                 recv_header.from_bytes(data)
                 print("Received header:", recv_header)
 
-                if self.is_packet_valid(recv_header):
+                if recv_header.FIN == 1:
+                    # Received FIN signal, send ACK and perform closing operations
+                    print("Received FIN signal. Sending ACK...")
+                    self.header.ACK = 1
+                    self.header.SEQ_num = recv_header.SEQ_num
+                    self.sock.sendto(self.header.to_bytes(), addr)
+
+                    # Send FIN
+                    print("Sending FIN...")
+                    self.header.FIN = 1
+                    self.header.ACK = 0
+                    self.sock.sendto(self.header.to_bytes(), addr)
+
+                    # Wait for a short time to make sure the other party receives the FIN
+                    time.sleep(1)
+
+                    # Perform closing operations or signal upper layer for closing
+                    # return None, None  # Signal upper layer to close connection
+                    self.close_event.set()
+                    break
+                elif self.is_packet_valid(recv_header):
                     if recv_header.SEQ_num == self.expected_seq_num:
                         print(f"Expected packet received: SEQ_num={recv_header.SEQ_num}")
                         self.expected_seq_num += 1
@@ -213,33 +233,38 @@ class RDTSocket():
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         # Initiate connection termination (4-way handshake)
+        print("Initiating connection termination (4-way handshake)")
         self.header.FIN = 1
         self.header.ACK = 0
         self.sock.sendto(self.header.to_bytes(), self.peer_address)
 
         # Wait for ACK of FIN
+        print("Waiting for ACK of FIN...")
         while True:
             data, addr = self.sock.recvfrom(1024)
             if data:
                 recv_header = RDTHeader()
                 recv_header.from_bytes(data)
                 if recv_header.ACK == 1:
+                    print("ACK of FIN received")
                     break
 
         # Wait for FIN from peer
+        print("Waiting for FIN from peer...")
         while True:
             data, addr = self.sock.recvfrom(1024)
             if data:
                 recv_header = RDTHeader()
                 recv_header.from_bytes(data)
                 if recv_header.FIN == 1:
+                    print("FIN from peer received")
                     # Send ACK for FIN
                     self.header.FIN = 0
                     self.header.ACK = 1
                     self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                    print("ACK for FIN sent")
                     break
 
         self.close_event.set()
         #############################################################################
-        # raise NotImplementedError()
 
