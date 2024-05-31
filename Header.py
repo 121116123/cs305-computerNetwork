@@ -70,5 +70,34 @@ class RDTHeader():
         self.PAYLOAD = data[42:].decode()
 
         return self
+        
 
+    def calc_checksum(self):
+        res = 0
+        data = self.to_bytes()[13:]
 
+        if len(data) % 2 == 1:
+            data = data + b'\x00'
+
+        for i in range(0, len(data), 2):
+            res += int.from_bytes(data[i:i + 2], 'big')
+
+        res = (res & 0xffff) + (res >> 16)
+        res = (res & 0xffff) + (res >> 16)
+        return (~res) & 0xffff
+        
+
+    def set_checksum(self):
+        self.CHECKSUM = 0
+        self.CHECKSUM = self.calc_checksum()
+        
+
+    def check_valid(self):
+        checksum1 = self.CHECKSUM
+        self.CHECKSUM = 0
+        self.CHECKSUM = self.calc_checksum()
+        checksum2 = self.CHECKSUM
+        self.CHECKSUM = checksum1
+        if checksum1 != checksum2:
+            return False
+        return True
