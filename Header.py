@@ -116,5 +116,3 @@ class RDTHeader():
         if checksum1 != checksum2:
             return False
         return True
-
-
