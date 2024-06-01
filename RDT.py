@@ -3,8 +3,6 @@ import socket
 import time
 
 from Header import RDTHeader
-
-
 class RDTSocket():
     def __init__(self) -> None:
         """
@@ -14,7 +12,7 @@ class RDTSocket():
         # TODO: NECESSARY ATTRIBUTES HERE                                           #
         #############################################################################
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.peer_address = None
+        # self.peer_address = None
         self.header = RDTHeader()
         self.recv_buffer = []
         self.send_lock = multiprocessing.Lock()
@@ -23,6 +21,8 @@ class RDTSocket():
         self.ack_event = multiprocessing.Event()
         self.timeout = 1  # Timeout for retransmissions
         self.expected_seq_num = 0
+        self.proxy_server_addr=None
+        self.target_address=None
 
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
@@ -60,14 +60,19 @@ class RDTSocket():
         while True:
             data, addr = self.sock.recvfrom(1024)
             if data:
+                print("begin accept")
                 self.header.from_bytes(data)
                 if self.header.SYN == 1:
                     # Send SYN-ACK packet
                     with self.send_lock:
-                        self.peer_address = addr
+                        # self.proxy_server_addr = addr
                         self.header.SYN = 1
                         self.header.ACK = 1
-                        self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                        self.header.test_case=20
+                        self.header.assign_address(self.sock.getsockname(),self.header.src)
+                        self.target_address=self.header.Target_address
+                        print("accept ",self.header.src,self.header.tgt,self.proxy_server_addr)
+                        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
                         break
 
         # Wait for ACK from client
@@ -81,7 +86,8 @@ class RDTSocket():
         # Create new RDTSocket instance for the connection
         conn = RDTSocket()
         # conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        conn.peer_address = self.peer_address
+        conn.proxy_server_addr = self.proxy_server_addr
+        conn.header.Target_address=self.target_address
         conn.sock=self.sock
         print("accepted")
         return conn
@@ -95,18 +101,24 @@ class RDTSocket():
             address:    Target IP address and its port
         """
         #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        self.peer_address = address
+        # TODO: YOUR CODE HERE
         # Send SYN packet to initiate connection
         self.header.SYN = 1
         self.header.ACK = 0
-        print("Sender: Sending SYN packet...")
-        self.sock.sendto(self.header.to_bytes(), self.peer_address)
+        self.header.test_case=20
+        self.header.assign_address(self.sock.getsockname(),address)
+        print("Sender: Sending SYN packet...",self.proxy_server_addr)
+        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
 
         # Wait for SYN-ACK response
         print("Sender: Waiting for SYN-ACK response...")
         while True:
-            data, addr = self.sock.recvfrom(1024)
+            try:
+                data, addr = self.sock.recvfrom(1024)
+            except socket.error as e:
+                print(f"Socket error: {e}")
+                continue
+
             if data:
                 print("Sender: Received SYN-ACK response")
                 self.header.from_bytes(data)
@@ -116,7 +128,9 @@ class RDTSocket():
                     print("Sender: Sending ACK...")
                     self.header.SYN = 0
                     self.header.ACK = 1
-                    self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                    self.header.test_case=20
+                    self.header.assign_address(self.sock.getsockname(), address)
+                    self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
                     break
         #############################################################################
         # raise NotImplementedError()
@@ -146,13 +160,14 @@ class RDTSocket():
                 self.header.PAYLOAD = chunk
                 self.header.LEN = len(chunk)
                 self.header.SEQ_num = chunk_index  # Update sequence number
-                # self.header.CHECKSUM = self.calculate_checksum()
-                self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                self.header.CHECKSUM = self.header.calc_checksum()
+                self.header.test_case=test_case
+                # self.header.assign_address(self.header.src,self.header.tgt)
+                self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
                 # Wait for ACK
                 while True:
                     print(f"Waiting for ACK for chunk {chunk_index + 1}")
                     data, addr = self.sock.recvfrom(1024)
-                    print(f"Received data: {data}")
                     if data:
                         recv_header = RDTHeader()
                         recv_header.from_bytes(data)
@@ -161,7 +176,7 @@ class RDTSocket():
                             break
                     else:
                         print("Timeout, resending packet")
-                        self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                        self.sock.sendto(self.header.to_bytes(),self.proxy_server_addr)
         #############################################################################
         # raise NotImplementedError()
 
@@ -186,14 +201,17 @@ class RDTSocket():
                     # Received FIN signal, send ACK and perform closing operations
                     print("Received FIN signal. Sending ACK...")
                     self.header.ACK = 1
+                    self.header.test_case=20
                     self.header.SEQ_num = recv_header.SEQ_num
-                    self.sock.sendto(self.header.to_bytes(), addr)
+                    # self.header
+                    self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
 
                     # Send FIN
                     print("Sending FIN...")
                     self.header.FIN = 1
                     self.header.ACK = 0
-                    self.sock.sendto(self.header.to_bytes(), addr)
+                    self.header.test_case=20
+                    self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
 
                     # Wait for a short time to make sure the other party receives the FIN
                     time.sleep(1)
@@ -207,9 +225,10 @@ class RDTSocket():
                         self.expected_seq_num += 1
                         self.header.ACK = 1
                         self.header.SEQ_num = recv_header.SEQ_num
-                        self.sock.sendto(self.header.to_bytes(), addr)
-                        print("\nrecv back ",recv_header.PAYLOAD,addr)
-                        return recv_header.PAYLOAD, addr
+                        self.header.test_case=recv_header.test_case
+                        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+                        print("\nrecv back ",recv_header.PAYLOAD,self.proxy_server_addr)
+                        return recv_header.PAYLOAD, self.proxy_server_addr
                     else:
                         print(f"Unexpected SEQ_num: {recv_header.SEQ_num}. Expected: {self.expected_seq_num}")
                 else:
@@ -218,7 +237,7 @@ class RDTSocket():
                 # Send ACK for the last correctly received packet
                 self.header.ACK = 1
                 self.header.SEQ_num = self.expected_seq_num - 1
-                self.sock.sendto(self.header.to_bytes(), addr)
+                self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
 
     def is_packet_valid(self, header):
         # Implement your packet validation logic here (e.g., checksum)
@@ -236,7 +255,7 @@ class RDTSocket():
         print("Initiating connection termination (4-way handshake)")
         self.header.FIN = 1
         self.header.ACK = 0
-        self.sock.sendto(self.header.to_bytes(), self.peer_address)
+        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
 
         # Wait for ACK of FIN
         print("Waiting for ACK of FIN...")
@@ -261,7 +280,7 @@ class RDTSocket():
                     # Send ACK for FIN
                     self.header.FIN = 0
                     self.header.ACK = 1
-                    self.sock.sendto(self.header.to_bytes(), self.peer_address)
+                    self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
                     print("ACK for FIN sent")
                     break
 
