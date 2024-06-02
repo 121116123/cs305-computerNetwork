@@ -116,3 +116,8 @@ class RDTHeader():
         if checksum1 != checksum2:
             return False
         return True
+
+    def __str__(self):
+        return (f"RDTHeader(test_case={self.test_case}, SYN={self.SYN}, FIN={self.FIN}, ACK={self.ACK}, SEQ_num={self.SEQ_num}, "
+                f"ACK_num={self.ACK_num}, LEN={self.LEN}, CHECKSUM={self.CHECKSUM}, "
+                f"Source_address={self.src}, Target_address={self.tgt}, PAYLOAD={self.PAYLOAD})")

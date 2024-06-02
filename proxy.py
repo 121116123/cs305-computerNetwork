@@ -36,9 +36,7 @@ def case_test(pkt, outSock: socket.socket):
         header = RDTHeader().from_bytes(pkt)
         addr = header.tgt
         test_case = header.test_case
-
         print(f"Received packet with test case {test_case} from {header.src} to {header.tgt}")
-
         lock.acquire()
 
         if f"{header.src}-{header.tgt}" not in connection_pool.keys() and f"{header.tgt}-{header.src}" not in connection_pool.keys():
@@ -56,7 +54,6 @@ def case_test(pkt, outSock: socket.socket):
             connection_pool[connection_key].append(header)
             print(f"Added header to connection pool: {connection_key}")
         else:
-
             outSock.sendto(pkt, addr)
             print(f"Sent packet directly with test case 20 to {addr}")
 
@@ -72,7 +69,7 @@ def case_test(pkt, outSock: socket.socket):
                 outSock.sendto(pkt, addr)
                 lock.acquire()
                 case_test_status_pool[connection_key][test_case] = True
-                print(f"Test case 0 passed for {connection_key}")
+                # print(f"Test case 0 passed for {connection_key}")
                 lock.release()
 
         if test_case == 5:
@@ -82,7 +79,7 @@ def case_test(pkt, outSock: socket.socket):
                 lock.acquire()
                 case_test_status_pool[connection_key][test_case] = True
 
-                print(f"Test case 5 passed for {connection_key}")
+                # print(f"Test case 5 passed for {connection_key}")
 
                 lock.release()
 
@@ -180,6 +177,7 @@ def result():
 
     server_sock.listen(5)
     while True:
+        # print("resulting, accepting..")
         client_sock, client_addr = server_sock.accept()
         try:
             data = client_sock.recv(1024)

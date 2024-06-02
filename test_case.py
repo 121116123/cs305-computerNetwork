@@ -5,31 +5,31 @@ from multiprocessing import Process
 import signal
 
 # connect proxy server
-
-# proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
-# fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
-# fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 #
-# resultAddr = ('10.16.52.94', 12230)
+proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
+fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
+toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
+fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
+toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
+resultAddr = ('10.16.52.94', 12230)
 #
-# #TODO change the adress to your address
-# sender_address = ("10.16.56.14", 12344)         # Your sender address
-# receiver_address = ("10.16.56.14", 12349)       # Your receiver address
+#TODO change the address to your address
+sender_address = ("10.25.64.142", 12344)         # Your sender address
+receiver_address = ("10.25.64.142", 12349)       # Your receiver address
 
 
 # connect locally server
+# # #
+# proxy_server_address = ('127.0.0.1', 12234)
+# fromSenderAddr = ('127.0.0.1', 12345)
+# toReceiverAddr = ('127.0.0.1', 12346)
+# fromReceiverAddr = ('127.0.0.1', 12347)
+# toSenderAddr = ('127.0.0.1', 12348)
 #
-proxy_server_address = ('127.0.0.1', 12234)
-fromSenderAddr = ('127.0.0.1', 12345)
-toReceiverAddr = ('127.0.0.1', 12346)
-fromReceiverAddr = ('127.0.0.1', 12347)
-toSenderAddr = ('127.0.0.1', 12348)
+# sender_address = ("127.0.0.1", 12244)
+# receiver_address = ("127.0.0.1", 12249)
+# resultAddr = ("127.0.0.1", 12230)
 
-sender_address = ("127.0.0.1", 12244)
-receiver_address = ("127.0.0.1", 12249)
-resultAddr = ("127.0.0.1", 12230)
 num_test_case = 16
 
 
@@ -63,7 +63,6 @@ def test_case():
         except Exception as e:
             print(e)
         finally:
-
             client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_sock.connect(resultAddr)
 
@@ -136,7 +135,7 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
 
     sock = sender_sock
     sock.proxy_server_addr = fromSenderAddr
-
+    print("send want bind ",source_address)
     sock.bind(source_address)
     sock.connect(target_address)
 
@@ -158,6 +157,7 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
         print("Sender: Sending data...")
         sock.send(data=all_data, test_case=test_case)
         print("Sender: Data sent")
+        sock.close()
         # raise NotImplementedError
         #############################################################################
 
@@ -168,6 +168,12 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
         data = "Short Message test"
         sock.send(data=data, test_case=test_case)
 
+        # 多次发送
+        data="short message test 2"
+        sock.send(data=data, test_case=test_case)
+
+        print("send finish")
+        sock.close()
         # raise NotImplementedError
     #############################################################################
 
@@ -181,8 +187,8 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     """
     sock = reciever_sock
     sock.proxy_server_addr = fromReceiverAddr
+    print("recv want bind",source_address)
     sock.bind(source_address)
-    print("recv bind",source_address)
     server_sock = sock.accept()
 
     if test_case >= 5:
@@ -190,8 +196,8 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
         # TODO: you need to receive original.txt from sender. Here you need to write the code according to your own implementation.
         with open('transmit.txt', 'w') as file:
             while True:
-                data, _ = server_sock.recv()
-                if not data:
+                data, finished = server_sock.recv()
+                if finished:
                     # Connection closed by sender
                     break
                 file.write(data)
@@ -204,11 +210,15 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
         #############################################################################
 
     else:
-
         #############################################################################
         # TODO: you need to receive a short message. May be you can use:
-        data = server_sock.recv()
-        print("Receiver: Received message:", data)
+        while True:
+            data, finished = server_sock.recv()
+            # print("Receiver: Received message:", data)
+            print("finished ",finished)
+            if finished:
+                # Connection closed by sender
+                break
         # server_sock.recv()
         # raise NotImplementedError
     #############################################################################
