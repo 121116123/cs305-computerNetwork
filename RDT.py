@@ -1,5 +1,6 @@
 import multiprocessing
 import socket
+import threading
 import time
 
 from Header import RDTHeader
@@ -25,8 +26,11 @@ class RDTSocket():
         self.expected_seq_num = 0
         self.send_seq_num = 0  # Sequence number for sending data
         self.proxy_server_addr = None
+        # 给sender用的
         self.target_address = None
         self.my_address = None
+        # 给recv用的
+        self.connections = {}  # Store active connections
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
@@ -65,8 +69,8 @@ class RDTSocket():
             data, addr = self.sock.recvfrom(1024)
             if data:
                 self.header.from_bytes(data)
-                print(f"Received SYN packet: {self.header}")
                 if self.header.SYN == 1:
+                    print(f"Received SYN packet: {self.header}")
                     # Send SYN-ACK packet
                     with self.send_lock:
                         # self.proxy_server_addr = addr
@@ -98,6 +102,47 @@ class RDTSocket():
         conn.sock = self.sock
         print("accepted, received ACK, and create a new conn")
         return conn
+
+    # 多路复用的accept
+    # def accept(self):  # type: ignore
+    #     while True:
+    #         print("accepting..listening..")
+    #         data, addr = self.sock.recvfrom(1024)
+    #         if data:
+    #             self.header.from_bytes(data)
+    #             print(f"Received SYN packet: {self.header}")
+    #             if self.header.SYN == 1:
+    #                 # Create a new thread for handling the connection
+    #                 threading.Thread(target=self.handle_connection, args=(self.header.src,)).start()
+    #
+    # def handle_connection(self, target_addr):
+    #     # Send SYN-ACK packet
+    #     with self.send_lock:
+    #         self.header.SYN = 1
+    #         self.header.ACK = 1
+    #         self.header.test_case = 20
+    #         self.my_address = self.sock.getsockname()
+    #         self.header.assign_address(self.my_address, target_addr)
+    #         self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+    #         print(f"Sent SYN-ACK packet: {self.header}")
+    #
+    #     # Wait for ACK from client
+    #     while True:
+    #         data, addr = self.sock.recvfrom(1024)
+    #         if data:
+    #             self.header.from_bytes(data)
+    #             print(f"Received ACK packet: {self.header}")
+    #             if self.header.ACK == 1:
+    #                 break
+    #
+    #     # Create new RDTSocket instance for the connection
+    #     conn = RDTSocket()
+    #     conn.proxy_server_addr = self.proxy_server_addr
+    #     conn.header.assign_address(self.my_address, target_addr)
+    #     conn.sock = self.sock
+    #     self.connections[conn.header.tgt] = conn
+    #     print(f"Accepted connection from {conn.header.tgt} and created a new connection instance")
+    #     return conn
 
     def connect(self, address: (str, int)):  # type: ignore
         """
@@ -181,7 +226,7 @@ class RDTSocket():
                             recv_header = RDTHeader()
                             recv_header.from_bytes(data)
                             if recv_header.ACK == 1 and recv_header.SEQ_num == self.send_seq_num:
-                                self.send_seq_num+=1
+                                self.send_seq_num += 1
                                 print(f"Received ACK for chunk {chunk_index + 1}")
                                 break
                     except socket.timeout:
