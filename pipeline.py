@@ -8,6 +8,7 @@ from Header import RDTHeader
 INITIAL_SSTHRESH = 16
 CHUNK_SIZE = 536
 
+
 class test():
     def __init__(self):
         self.base_seq_num = 0
@@ -34,13 +35,6 @@ class test():
         # TODO: receive an ACK. [NON-BLOCKING]
         # return None immediately if there is no packet.
 
-        if random.random() < 0.02 and self.send_seq_num > self.last_ack_id + 1:
-            res = RDTHeader()
-            res.ACK = 1
-            res.ACK_num = self.last_ack_id + 1
-            print(f"ack {self.last_ack_id + 1}")
-            return res
-        return None
         pass
 
     def recv_single(self) -> RDTHeader:
@@ -49,6 +43,7 @@ class test():
 
     def reply_ack(self, ack_num, test_case):
         # TODO: reply an ACK pack with ack_num.
+        print(f"ack {ack_num}")
         pass
 
     def listen_acks(self, data, test_case):
@@ -65,7 +60,7 @@ class test():
                     if dup_ack >= 3:
                         dup_ack = 0
                         print(f"fast ret: {ack_id + 1}")
-                        self.ssthresh = max(self.ssthresh // 2, 2)
+                        self.ssthresh = max(self.cwnd // 2, 2)
                         self.cwnd = self.ssthresh
                         self.send_chunk(ack_id + 1, data[ack_id + 1], test_case)
                         with self.send_lock:
@@ -80,7 +75,7 @@ class test():
                     if self.cwnd < self.ssthresh:
                         self.cwnd += 1
                     else:
-                        self.cwnd += 1/self.cwnd
+                        self.cwnd += 1 / self.cwnd
             else:
                 tim = time.time()
                 with self.send_lock:
@@ -91,11 +86,11 @@ class test():
                                 break
                             rm.append((i, t))
                         for i, t in rm:
-                            print(f"timeout: {i}")
                             self.send_tim.remove((i, t))
+                            print(f"timeout: {i}")
                             if i <= self.last_ack_id:
                                 continue
-                            self.ssthresh = max(self.ssthresh // 2, 2)
+                            self.ssthresh = max(self.cwnd // 2, 2)
                             self.cwnd = 1
                             self.send_chunk(i, data[i], test_case)
                             self.send_tim.append((i, time.time()))
@@ -104,7 +99,7 @@ class test():
 
     def send_init_header(self, chunk_cnt, test_case=0):
         print("Sending init header")
-        self.send_single(int.to_bytes(chunk_cnt), test_case)
+        self.send_single(chunk_cnt.to_bytes(4, byteorder='big'), test_case)
 
     def send_pipelined(self, data: bytes = None, test_case=0):
         # could be sent by a single chunk.
@@ -145,34 +140,22 @@ class test():
             return header.PAYLOAD[:-5]
 
         if header.LEN == 4:
-            self.reply_ack(header.SEQ_num, test_case)
-            res = b""
             chunk_siz = int.from_bytes(header.PAYLOAD, byteorder='big')
+            res = [None] * chunk_siz
             self.base_seq_num = header.SEQ_num + 1
             cur = 0
+            self.test_cur = cur
             while cur < chunk_siz:
                 header = self.recv_single()
                 if header is None:
                     continue
-                if cur + self.base_seq_num == header.SEQ_num:
-                    cur += 1
-                    res += header.PAYLOAD
-                self.reply_ack(header.SEQ_num + cur - 1, test_case)
-
-            return res
+                idx = header.SEQ_num - self.base_seq_num
+                if res[idx] is None:
+                    res[idx] = header.PAYLOAD
+                    while cur < chunk_siz and res[cur] is not None:
+                        cur += 1
+                    self.reply_ack(self.base_seq_num + cur - 1, test_case)
+                self.test_cur = cur
+            return b''.join(res)
         else:
             return None
-
-if __name__ == '__main__':
-    a = test()
-
-    data_blocks = []
-    with open('transmit.txt', 'rb') as file:
-        while True:
-            block = file.read(1024)
-            if not block:
-                break
-            data_blocks.append(block.decode())
-            # all_data = b''.join(data_blocks)
-    all_data = ''.join(data_blocks)
-    a.send_pipelined(all_data.encode())
