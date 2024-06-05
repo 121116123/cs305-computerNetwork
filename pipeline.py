@@ -111,13 +111,14 @@ class test():
             return
 
         # segmentation
+        chunks = [data[i:i + CHUNK_SIZE] for i in range(0, len(data), CHUNK_SIZE)]
+        self.send_init_header(len(chunks), test_case)
+
         self.cwnd = 1
         self.ssthresh = INITIAL_SSTHRESH
         self.last_ack_id = -1
         self.base_seq_num = self.send_seq_num
-        self.send_seq_num = 0
 
-        chunks = [data[i:i + CHUNK_SIZE] for i in range(0, len(data), CHUNK_SIZE)]
         ack_thread = threading.Thread(target=self.listen_acks, args=(chunks, test_case))
         ack_thread.daemon = True
         ack_thread.start()
