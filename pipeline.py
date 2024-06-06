@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import multiprocessing
+import socket
 import threading
 import time
 import random
@@ -20,8 +22,38 @@ class test():
         self.timeout = 1
         self.send_seq_num = 0
 
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # self.peer_address = None
+        self.header = RDTHeader()
+        self.recv_buffer = []
+        self.send_lock = multiprocessing.Lock()
+        self.recv_lock = multiprocessing.Lock()
+        self.close_event = multiprocessing.Event()
+        self.ack_event = multiprocessing.Event()
+        self.expected_seq_num = 0
+        self.proxy_server_addr = None
+        self.target_address = None
+        self.my_address = None
+
     def send_single(self, data=None, test_case=0):
         # TODO: send a single pack and check the ACK.
+        with self.send_lock:
+            self.header.PAYLOAD = data
+            self.header.LEN = len(data)
+            self.header.SEQ_num = self.send_seq_num  # Use send_seq_num
+            self.header.CHECKSUM = self.header.calc_checksum()
+            self.header.test_case = test_case
+            # self.header.assign_address(self.header.src,self.header.tgt)
+            self.sock.sendto(self.my_address, self.proxy_server_addr)
+            while True:
+                data, addr = self.sock.recvfrom(1024)
+                if data:
+                    recv_header = RDTHeader()
+                    recv_header.from_bytes(data)
+                    if recv_header.ACK == 1 :
+                        self.send_seq_num += 1
+                        print("Received ACK for single message: ",recv_header)
+                        break
         pass
 
     def send_chunk(self, idx, chunk, test_case):
