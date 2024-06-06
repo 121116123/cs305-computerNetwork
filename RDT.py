@@ -1,4 +1,3 @@
-import multiprocessing
 import socket
 import threading
 import time
@@ -18,10 +17,8 @@ class RDTSocket():
         # self.peer_address = None
         self.header = RDTHeader()
         self.recv_buffer = []
-        self.send_lock = multiprocessing.Lock()
-        self.recv_lock = multiprocessing.Lock()
-        self.close_event = multiprocessing.Event()
-        self.ack_event = multiprocessing.Event()
+        self.close_event = threading.Event()
+        self.ack_event = threading.Event()
         self.timeout = 1  # Timeout for retransmissions
         self.expected_seq_num = 0
         self.send_seq_num = 0  # Sequence number for sending data
@@ -31,6 +28,7 @@ class RDTSocket():
         self.my_address = None
         # 给recv用的
         self.connections = {}  # Store active connections
+        self.connection_event = threading.Event()
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
@@ -53,78 +51,36 @@ class RDTSocket():
         #############################################################################
         # raise NotImplementedError()
 
-    def accept(self):  # type: ignore
-        """
-        When using this SOCKET to create an RDT SERVER, it should accept the connection
-        from a CLIENT. After that, an RDT connection should be established.
-        Please note that this function needs to support multithreading and be able to
-        establish multiple socket connections. Messages from different sockets should
-        be isolated from each other, requiring you to multiplex the data received at
-        the underlying UDP.
-        """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        while True:
-            print("accepting..listening..")
-            data, addr = self.sock.recvfrom(1024)
-            if data:
-                self.header.from_bytes(data)
-                if self.header.SYN == 1:
-                    print(f"Received SYN packet: {self.header}")
-                    # Send SYN-ACK packet
-                    with self.send_lock:
-                        # self.proxy_server_addr = addr
-                        self.header.SYN = 1
-                        self.header.ACK = 1
-                        self.header.test_case = 20
-                        self.my_address = self.sock.getsockname()
-                        self.target_address = self.header.src
-                        self.header.assign_address(self.my_address, self.target_address)
-                        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
-                        print(f"Sent SYN-ACK packet: {self.header}")
-                        break
-
-        # Wait for ACK from client
-        while True:
-            data, addr = self.sock.recvfrom(1024)
-            if data:
-                self.header.from_bytes(data)
-                print(f"Received ACK packet: {self.header}")
-                if self.header.ACK == 1:
-                    break
-
-        # Create new RDTSocket instance for the connection
-        conn = RDTSocket()
-        # conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        conn.proxy_server_addr = self.proxy_server_addr
-        conn.header.assign_address(self.my_address, self.target_address)
-        # conn.header.Target_address = self.target_address
-        conn.sock = self.sock
-        print("accepted, received ACK, and create a new conn")
-        return conn
-
-    # 多路复用的accept
     # def accept(self):  # type: ignore
+    #     """
+    #     When using this SOCKET to create an RDT SERVER, it should accept the connection
+    #     from a CLIENT. After that, an RDT connection should be established.
+    #     Please note that this function needs to support multithreading and be able to
+    #     establish multiple socket connections. Messages from different sockets should
+    #     be isolated from each other, requiring you to multiplex the data received at
+    #     the underlying UDP.
+    #     """
+    #     #############################################################################
+    #     # TODO: YOUR CODE HERE                                                      #
     #     while True:
     #         print("accepting..listening..")
     #         data, addr = self.sock.recvfrom(1024)
     #         if data:
     #             self.header.from_bytes(data)
-    #             print(f"Received SYN packet: {self.header}")
     #             if self.header.SYN == 1:
-    #                 # Create a new thread for handling the connection
-    #                 threading.Thread(target=self.handle_connection, args=(self.header.src,)).start()
-    #
-    # def handle_connection(self, target_addr):
-    #     # Send SYN-ACK packet
-    #     with self.send_lock:
-    #         self.header.SYN = 1
-    #         self.header.ACK = 1
-    #         self.header.test_case = 20
-    #         self.my_address = self.sock.getsockname()
-    #         self.header.assign_address(self.my_address, target_addr)
-    #         self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
-    #         print(f"Sent SYN-ACK packet: {self.header}")
+    #                 print(f"Received SYN packet: {self.header}")
+    #                 # Send SYN-ACK packet
+    #                 with self.send_lock:
+    #                     # self.proxy_server_addr = addr
+    #                     self.header.SYN = 1
+    #                     self.header.ACK = 1
+    #                     self.header.test_case = 20
+    #                     self.my_address = self.sock.getsockname()
+    #                     self.target_address = self.header.src
+    #                     self.header.assign_address(self.my_address, self.target_address)
+    #                     self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+    #                     print(f"Sent SYN-ACK packet: {self.header}")
+    #                     break
     #
     #     # Wait for ACK from client
     #     while True:
@@ -137,12 +93,55 @@ class RDTSocket():
     #
     #     # Create new RDTSocket instance for the connection
     #     conn = RDTSocket()
+    #     # conn.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     #     conn.proxy_server_addr = self.proxy_server_addr
-    #     conn.header.assign_address(self.my_address, target_addr)
+    #     conn.header.assign_address(self.my_address, self.target_address)
+    #     # conn.header.Target_address = self.target_address
     #     conn.sock = self.sock
-    #     self.connections[conn.header.tgt] = conn
-    #     print(f"Accepted connection from {conn.header.tgt} and created a new connection instance")
+    #     print("accepted, received ACK, and create a new conn")
     #     return conn
+
+    # 多路复用的accept
+    def accept(self):  # type: ignore
+        while True:
+            print("accepting..listening..")
+            data, addr = self.sock.recvfrom(1024)
+            if data:
+                header = RDTHeader()
+                header.from_bytes(data)
+                print(f"Received SYN packet: {header}")
+                if header.SYN == 1:
+                    threading.Thread(target=self.handle_connection, args=(header.src,header.tgt)).start()
+
+    def handle_connection(self, target_addr,source_addr):
+        # Send SYN-ACK packet
+        conn_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        conn_sock.bind(('', 0))  # Bind to a random port
+        header = RDTHeader()
+        header.SYN = 1
+        header.ACK = 1
+        header.test_case = 20
+        self.my_address=source_addr
+        self.header.assign_address(self.my_address, target_addr)
+        self.sock.sendto(header.to_bytes(), self.proxy_server_addr)
+        print(f"Sent SYN-ACK packet: {header}")
+
+        # Wait for ACK from client
+        while True:
+            data, addr = conn_sock.recvfrom(1024)
+            if data:
+                header.from_bytes(data)
+                print(f"Received ACK packet: {self.header}")
+                if header.ACK == 1:
+                    break
+
+        # Create new RDTSocket instance for the connection
+        conn = RDTSocket()
+        conn.proxy_server_addr = self.proxy_server_addr
+        conn.header.assign_address(source_addr, target_addr)
+        conn.sock = conn_sock
+        self.connections[conn.header.tgt] = conn
+        print(f"Accepted connection from {conn.header.tgt} and created a new connection instance")
 
     def connect(self, address: (str, int)):  # type: ignore
         """
@@ -206,33 +205,32 @@ class RDTSocket():
         """
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
-        with self.send_lock:
-            chunks = [data[i:i + 1024] for i in range(0, len(data), 1024)]
-            for chunk_index, chunk in enumerate(chunks):
-                print(f"Sending chunk {chunk_index + 1}/{len(chunks)}: {chunk}")
-                self.header.PAYLOAD = chunk
-                self.header.LEN = len(chunk)
-                self.header.SEQ_num = self.send_seq_num  # Use send_seq_num
-                self.header.CHECKSUM = self.header.calc_checksum()
-                self.header.test_case = test_case
-                # self.header.assign_address(self.header.src,self.header.tgt)
-                self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
-                while True:
-                    print(f"Waiting for ACK for chunk {chunk_index + 1}")
-                    self.sock.settimeout(self.timeout)  # Set socket timeout
-                    try:
-                        data, addr = self.sock.recvfrom(1024)
-                        if data:
-                            recv_header = RDTHeader()
-                            recv_header.from_bytes(data)
-                            if recv_header.ACK == 1 and recv_header.SEQ_num == self.send_seq_num:
-                                self.send_seq_num += 1
-                                print(f"Received ACK for chunk {chunk_index + 1}")
-                                break
-                    except socket.timeout:
-                        print("Timeout, resending packet")
-                        self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
-                        # self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+        chunks = [data[i:i + 1024] for i in range(0, len(data), 1024)]
+        for chunk_index, chunk in enumerate(chunks):
+            print(f"Sending chunk {chunk_index + 1}/{len(chunks)}: {chunk}")
+            self.header.PAYLOAD = chunk
+            self.header.LEN = len(chunk)
+            self.header.SEQ_num = self.send_seq_num  # Use send_seq_num
+            self.header.CHECKSUM = self.header.calc_checksum()
+            self.header.test_case = test_case
+            # self.header.assign_address(self.header.src,self.header.tgt)
+            self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+            while True:
+                print(f"Waiting for ACK for chunk {chunk_index + 1}")
+                self.sock.settimeout(self.timeout)  # Set socket timeout
+                try:
+                    data, addr = self.sock.recvfrom(1024)
+                    if data:
+                        recv_header = RDTHeader()
+                        recv_header.from_bytes(data)
+                        if recv_header.ACK == 1 and recv_header.SEQ_num == self.send_seq_num:
+                            self.send_seq_num += 1
+                            print(f"Received ACK for chunk {chunk_index + 1}")
+                            break
+                except socket.timeout:
+                    print("Timeout, resending packet")
+                    self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
+                    # self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
         #############################################################################
         # raise NotImplementedError()
 
