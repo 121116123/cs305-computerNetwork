@@ -10,7 +10,6 @@ INITIAL_SSTHRESH = 16
 CHUNK_SIZE = 256
 
 
-
 class RDTSocket():
     def __init__(self) -> None:
         """
@@ -37,7 +36,7 @@ class RDTSocket():
         self.recv_lock = multiprocessing.Lock()
         self.close_event = multiprocessing.Event()
         self.ack_event = multiprocessing.Event()
-        self.timeout = 1  # Timeout for retransmissions
+        self.timeout = 2  # Timeout for retransmissions
         self.proxy_server_addr = None
         self.target_address = None
         self.my_address = None
@@ -168,13 +167,14 @@ class RDTSocket():
         #############################################################################
         # raise NotImplementedError()
 
-    def send_single(self, data=None, test_case=0):
+    def send_single(self, data=None, flag=0, test_case=0):
         # TODO: send a single pack and check the ACK.
         with self.send_lock:
             self.header.PAYLOAD = data
             self.header.LEN = len(data)
             self.header.SEQ_num = self.send_seq_num  # Use send_seq_num
             self.header.ACK = 0
+            self.header.Reserved = flag
             self.header.set_checksum()
             self.header.test_case = test_case
             # self.header.assign_address(self.header.src,self.header.tgt)
@@ -209,7 +209,6 @@ class RDTSocket():
         self.header.test_case = test_case
         # self.header.assign_address(self.header.src,self.header.tgt)
         self.sock.sendto(self.header.to_bytes(), self.proxy_server_addr)
-
         print(f"send chunk: {idx}")
 
     # def send(self, data=None, tcpheader=None, test_case=0):
@@ -322,7 +321,7 @@ class RDTSocket():
         while True:
             header = self.recv_ack()
             if header:
-                ack_id = header.ACK_num
+                ack_id = header.ACK_num - self.base_seq_num
                 # if ack_id < self.base_seq_num:
                 #     continue
                 print(f"ack_id: {ack_id}, last: {self.last_ack_id}")
@@ -363,27 +362,23 @@ class RDTSocket():
                             rm.append((i, t))
                         for i, t in rm:
                             self.send_tim.remove((i, t))
-                            print(f"timeout: {i}")
+                            print(f"removed: {i}")
                             if i <= self.last_ack_id:
                                 continue
+                            print(f"retrans {i}")
                             self.ssthresh = max(self.cwnd // 2, 2)
                             self.cwnd = 1
                             self.send_chunk(i, data[i], test_case)
+                            print(f"sent chunk {i}")
                             self.send_tim.append((i, time.time()))
 
                 time.sleep(0.01)
 
     def send_init_header(self, chunk_cnt, test_case=0):
         print("Sending init header")
-        self.send_single(chunk_cnt.to_bytes(4, byteorder='big').decode(), test_case)
+        self.send_single(chunk_cnt.to_bytes(4, byteorder='big').decode(), 1, test_case)
 
     def send_pipelined(self, data: str = None, test_case=0):
-        # could be sent by a single chunk.
-        if len(data) < CHUNK_SIZE - 5:
-            self.send_single(data + '     ', test_case)
-            return
-
-        # segmentation
         chunks = [data[i:i + CHUNK_SIZE] for i in range(0, len(data), CHUNK_SIZE)]
         self.send_init_header(len(chunks), test_case)
         print("chunk_size: ",len(chunks))
@@ -410,31 +405,33 @@ class RDTSocket():
 
     def recv_pipelined(self):
         header,_ = self.recv_single()
+        while header.Reserved != 1:
+            header,_ = self.recv_single()
+        print(f"received header: {header}")
         test_case = header.test_case
-        if header.LEN >= 5:
-            self.reply_ack(header.SEQ_num, test_case)
-            return header.PAYLOAD[:-5]
 
-        if header.LEN == 4:
-            chunk_siz = int.from_bytes(header.PAYLOAD.encode(), byteorder='big')
-            res = [None] * chunk_siz
-            self.base_seq_num = header.SEQ_num + 1
-            cur = 0
-            self.test_cur = cur
-            while cur < chunk_siz:
-                header,_ = self.recv_single()
-                if header is None:
-                    continue
-                idx = header.SEQ_num - self.base_seq_num
-                if res[idx] is None:
-                    res[idx] = header.PAYLOAD
-                    while cur < chunk_siz and res[cur] is not None:
-                        cur += 1
-                self.reply_ack(self.base_seq_num + cur , test_case)
-                self.test_cur = cur
-            return ''.join(res)
-        else:
-            return None
+        chunk_siz = int.from_bytes(header.PAYLOAD.encode(), byteorder='big')
+        res = [None] * chunk_siz
+        self.base_seq_num = header.SEQ_num + 1
+        print("base_seq_num: ", self.base_seq_num)
+        cur = 0
+        while cur < chunk_siz:
+            header, _ = self.recv_single()
+            if header is None:
+                continue
+            idx = header.SEQ_num - self.base_seq_num
+            if res[idx] is None:
+                res[idx] = header.PAYLOAD
+                while cur < chunk_siz and res[cur] is not None:
+                    cur += 1
+            self.reply_ack(self.base_seq_num + cur - 1, test_case)
+
+        fin = 0
+        while fin != 1:
+            header, fin = self.recv_single()
+            if fin == 0:
+                self.reply_ack(self.base_seq_num + cur - 1, test_case)
+        return ''.join(res)
 
     def recv_ack(self) -> RDTHeader | None:
         # TODO: receive an ACK. [NON-BLOCKING]

@@ -6,31 +6,31 @@ import signal
 
 # connect proxy server
 # #
-# proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
-# fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
-# fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
-# resultAddr = ('10.16.52.94', 12230)
-# # #
-# #TODO change the address to your address
-# sender_address = ("10.25.64.142", 12344)         # Your sender address
-# receiver_address = ("10.25.64.142", 12349)       # Your receiver address
+proxy_server_address = ('10.16.52.172', 12234)   # ProxyServerAddress
+fromSenderAddr = ('10.16.52.172', 12345)         # FromSender
+toReceiverAddr = ('10.16.52.172', 12346)         # ToSender
+fromReceiverAddr = ('10.16.52.172', 12347)       # FromReceiver
+toSenderAddr = ('10.16.52.172', 12348)           # ToReceiver
+resultAddr = ('10.16.52.172', 12230)
+# #
+#TODO change the address to your address
+sender_address = ("10.25.64.142", 12344)         # Your sender address
+receiver_address = ("10.25.64.142", 12349)       # Your receiver address
 # sender_address1=("10.25.64.142", 12350)
 
 
 # connect locally server
 # # #
-proxy_server_address = ('127.0.0.1', 12234)
-fromSenderAddr = ('127.0.0.1', 12345)
-toReceiverAddr = ('127.0.0.1', 12346)
-fromReceiverAddr = ('127.0.0.1', 12347)
-toSenderAddr = ('127.0.0.1', 12348)
-
-sender_address = ("127.0.0.1", 12244)
-sender_address1 = ("127.0.0.1", 12250)
-receiver_address = ("127.0.0.1", 12249)
-resultAddr = ("127.0.0.1", 12230)
+# proxy_server_address = ('127.0.0.1', 12234)
+# fromSenderAddr = ('127.0.0.1', 12345)
+# toReceiverAddr = ('127.0.0.1', 12346)
+# fromReceiverAddr = ('127.0.0.1', 12347)
+# toSenderAddr = ('127.0.0.1', 12348)
+#
+# sender_address = ("127.0.0.1", 12244)
+# sender_address1 = ("127.0.0.1", 12250)
+# receiver_address = ("127.0.0.1", 12249)
+# resultAddr = ("127.0.0.1", 12230)
 
 num_test_case = 16
 
@@ -48,24 +48,24 @@ def handler(signum, frame):
 def test_case():
     sender_sock = None
     reciever_sock = None
-    sender_sock1 = None
+    # sender_sock1 = None
 
     # TODO: You could change the range of this loop to test specific case(s) in local test.
 
-    for i in range(0, num_test_case):
+    for i in range(7, num_test_case):
         if sender_sock:
             del sender_sock
         if reciever_sock:
             del reciever_sock
-        if sender_sock1:
-            del sender_sock1
+        # if sender_sock1:
+        #     del sender_sock1
         sender_sock = RDTSocket()  # You can change the initialize RDTSocket()
         reciever_sock = RDTSocket()  # You can change the initialize RDTSocket()
-        sender_sock1 = RDTSocket()
+        # sender_sock1 = RDTSocket()
         print(f"Start test case : {i}")
 
         try:
-            result = RDT_start_test(sender_sock, sender_sock1, reciever_sock, sender_address, sender_address1,
+            result = RDT_start_test(sender_sock,  reciever_sock, sender_address,
                                     receiver_address, i)
         except Exception as e:
             print(e)
@@ -103,16 +103,16 @@ def test_case():
             time.sleep(10)
 
 
-def RDT_start_test(sender_sock, sender_sock1, reciever_sock, sender_address, sender_address1, receiver_address,
+def RDT_start_test(sender_sock,reciever_sock, sender_address, receiver_address,
                    test_case):
     sender = Process(target=RDT_send, args=(sender_sock, sender_address, receiver_address, test_case))
     receiver = Process(target=RDT_receive, args=(reciever_sock, receiver_address, test_case))
-    sender1 = Process(target=RDT_send, args=(sender_sock1, sender_address1, receiver_address, test_case))
+    # sender1 = Process(target=RDT_send, args=(sender_sock1, sender_address1, receiver_address, test_case))
 
     receiver.start()
     time.sleep(5)
     sender.start()
-    sender1.start()
+    # sender1.start()
 
     # if test_case < 5:
     #     signal.alarm(20)
@@ -120,7 +120,7 @@ def RDT_start_test(sender_sock, sender_sock1, reciever_sock, sender_address, sen
     #     signal.alarm(120)
 
     sender.join()
-    sender1.join()
+    # sender1.join()
     receiver.join()
 
     time.sleep(1)
@@ -204,12 +204,12 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     sock.server = Server(sock.header.src, sock.proxy_server_addr)
     sock.bind(source_address)
     server_sock = sock.accept()
-    server_sock1 = sock.accept()
+    # server_sock1 = sock.accept()
 
     if test_case >= 5:
         #############################################################################
         # TODO: you need to receive original.txt from sender. Here you need to write the code according to your own implementation.
-        with open('transmit.txt', 'wb') as file:
+        with open('transmit.txt', 'w') as file:
             # while True:
             data = server_sock.recv_pipelined()
             file.write(data)
@@ -225,15 +225,15 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
         #############################################################################
         # TODO: you need to receive a short message. May be you can use:
         data = server_sock.recv_pipelined()
-        data1=server_sock.recv_pipelined()
-        while True:
-            data, finished = server_sock.recv_single()
-            data1,finished1=server_sock1.recv_single()
-            if finished and finished1:
-                sock.server.stop()
-                break
+        # data1=server_sock.recv_pipelined()
+        # while True:
+        #     data, finished = server_sock.recv_single()
+        #     # data1,finished1=server_sock1.recv_single()
+        #     if finished :
+        #         sock.server.stop()
+        #         break
         # print("Receiver: Received message:", data)
-        print("finished recv pip data", data,data1)
+        print("finished recv pip data", data)
         # if finished:
         #     print("recv finish")
         # #     # Connection closed by sender
@@ -245,19 +245,42 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     #############################################################################
 
 
+# def test_file_integrity(original_path, transmit_path):
+#     with open(original_path, 'rb') as file1, open(transmit_path, 'rb') as file2:
+#         while True:
+#             block1 = file1.read(4096)
+#             block2 = file2.read(4096)
+#
+#             if block1 != block2:
+#                 return False
+#
+#             if not block1:
+#                 break
+#
+#     return True
 def test_file_integrity(original_path, transmit_path):
+    def normalize_line_endings(block):
+        return block.replace(b'\n', b'').replace(b'\r', b'')
+
     with open(original_path, 'rb') as file1, open(transmit_path, 'rb') as file2:
         while True:
             block1 = file1.read(4096)
             block2 = file2.read(4096)
 
+            # Normalize line endings
+            block1 = normalize_line_endings(block1)
+            block2 = normalize_line_endings(block2)
+
             if block1 != block2:
+                print("block1: ",block1)
+                print("block2: ",block2)
                 return False
 
             if not block1:
                 break
 
     return True
+
 
 
 if __name__ == '__main__':
