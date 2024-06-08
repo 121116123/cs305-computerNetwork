@@ -1,34 +1,36 @@
 import socket
 import time
-from RDT import RDTSocket
+from RDT import RDTSocket, Server
 from multiprocessing import Process
 import signal
 
 # connect proxy server
-#
-proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
-fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
-fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
-resultAddr = ('10.16.52.94', 12230)
-#
-#TODO change the address to your address
-sender_address = ("10.25.64.142", 12344)         # Your sender address
-receiver_address = ("10.25.64.142", 12349)       # Your receiver address
+# #
+# proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
+# fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
+# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
+# fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
+# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
+# resultAddr = ('10.16.52.94', 12230)
+# # #
+# #TODO change the address to your address
+# sender_address = ("10.25.64.142", 12344)         # Your sender address
+# receiver_address = ("10.25.64.142", 12349)       # Your receiver address
+# sender_address1=("10.25.64.142", 12350)
 
 
 # connect locally server
 # # #
-# proxy_server_address = ('127.0.0.1', 12234)
-# fromSenderAddr = ('127.0.0.1', 12345)
-# toReceiverAddr = ('127.0.0.1', 12346)
-# fromReceiverAddr = ('127.0.0.1', 12347)
-# toSenderAddr = ('127.0.0.1', 12348)
-#
-# sender_address = ("127.0.0.1", 12244)
-# receiver_address = ("127.0.0.1", 12249)
-# resultAddr = ("127.0.0.1", 12230)
+proxy_server_address = ('127.0.0.1', 12234)
+fromSenderAddr = ('127.0.0.1', 12345)
+toReceiverAddr = ('127.0.0.1', 12346)
+fromReceiverAddr = ('127.0.0.1', 12347)
+toSenderAddr = ('127.0.0.1', 12348)
+
+sender_address = ("127.0.0.1", 12244)
+sender_address1 = ("127.0.0.1", 12250)
+receiver_address = ("127.0.0.1", 12249)
+resultAddr = ("127.0.0.1", 12230)
 
 num_test_case = 16
 
@@ -46,20 +48,25 @@ def handler(signum, frame):
 def test_case():
     sender_sock = None
     reciever_sock = None
+    sender_sock1 = None
 
     # TODO: You could change the range of this loop to test specific case(s) in local test.
 
-    for i in range(num_test_case):
+    for i in range(0, num_test_case):
         if sender_sock:
             del sender_sock
         if reciever_sock:
             del reciever_sock
+        if sender_sock1:
+            del sender_sock1
         sender_sock = RDTSocket()  # You can change the initialize RDTSocket()
         reciever_sock = RDTSocket()  # You can change the initialize RDTSocket()
+        sender_sock1 = RDTSocket()
         print(f"Start test case : {i}")
 
         try:
-            result = RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address, i)
+            result = RDT_start_test(sender_sock, sender_sock1, reciever_sock, sender_address, sender_address1,
+                                    receiver_address, i)
         except Exception as e:
             print(e)
         finally:
@@ -96,13 +103,16 @@ def test_case():
             time.sleep(10)
 
 
-def RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address, test_case):
+def RDT_start_test(sender_sock, sender_sock1, reciever_sock, sender_address, sender_address1, receiver_address,
+                   test_case):
     sender = Process(target=RDT_send, args=(sender_sock, sender_address, receiver_address, test_case))
     receiver = Process(target=RDT_receive, args=(reciever_sock, receiver_address, test_case))
+    sender1 = Process(target=RDT_send, args=(sender_sock1, sender_address1, receiver_address, test_case))
 
     receiver.start()
     time.sleep(5)
     sender.start()
+    sender1.start()
 
     # if test_case < 5:
     #     signal.alarm(20)
@@ -110,11 +120,12 @@ def RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address,
     #     signal.alarm(120)
 
     sender.join()
+    sender1.join()
     receiver.join()
+
     time.sleep(1)
 
     # signal.alarm(0)
-
     if test_case < 5:
         return True
     else:
@@ -135,7 +146,8 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
 
     sock = sender_sock
     sock.proxy_server_addr = fromSenderAddr
-    print("send want bind ",source_address)
+    print("send want bind ", source_address)
+    sock.server = Server(sock.header.src, sock.proxy_server_addr)
     sock.bind(source_address)
     sock.connect(target_address)
 
@@ -155,7 +167,7 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
         except IOError as e:
             print(f"An error occurred: {e}")
         print("Sender: Sending data...")
-        sock.send(data=all_data, test_case=test_case)
+        sock.send_pipelined(data=all_data, test_case=test_case)
         print("Sender: Data sent")
         sock.close()
         # raise NotImplementedError
@@ -166,14 +178,15 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
         #############################################################################
         # TODO: you need to send a short message. May be you can use:
         data = "Short Message test"
-        sock.send(data=data, test_case=test_case)
+        sock.send_pipelined(data=data, test_case=test_case)
 
-        # 多次发送
-        data="short message test 2"
-        sock.send(data=data, test_case=test_case)
+        # # 多次发送
+        # data="short message test 2"
+        # sock.send_single(data=data, test_case=test_case)
 
-        print("send finish")
         sock.close()
+        print("send finish")
+
         # raise NotImplementedError
     #############################################################################
 
@@ -187,20 +200,19 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     """
     sock = reciever_sock
     sock.proxy_server_addr = fromReceiverAddr
-    print("recv want bind",source_address)
+    print("recv want bind", source_address)
+    sock.server = Server(sock.header.src, sock.proxy_server_addr)
     sock.bind(source_address)
     server_sock = sock.accept()
+    server_sock1 = sock.accept()
 
     if test_case >= 5:
         #############################################################################
         # TODO: you need to receive original.txt from sender. Here you need to write the code according to your own implementation.
-        with open('transmit.txt', 'w') as file:
-            while True:
-                data, finished = server_sock.recv()
-                if finished:
-                    # Connection closed by sender
-                    break
-                file.write(data)
+        with open('transmit.txt', 'wb') as file:
+            # while True:
+            data = server_sock.recv_pipelined()
+            file.write(data)
         print("Receiver: File received and saved as transmit.txt")
         if test_file_integrity('original.txt', 'transmit.txt'):
             print("These two files are same. Verified passed.")
@@ -212,13 +224,22 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
     else:
         #############################################################################
         # TODO: you need to receive a short message. May be you can use:
+        data = server_sock.recv_pipelined()
+        data1=server_sock.recv_pipelined()
         while True:
-            data, finished = server_sock.recv()
-            # print("Receiver: Received message:", data)
-            print("finished ",finished)
-            if finished:
-                # Connection closed by sender
+            data, finished = server_sock.recv_single()
+            data1,finished1=server_sock1.recv_single()
+            if finished and finished1:
+                sock.server.stop()
                 break
+        # print("Receiver: Received message:", data)
+        print("finished recv pip data", data,data1)
+        # if finished:
+        #     print("recv finish")
+        # #     # Connection closed by sender
+        #     sock.server.stop()
+        #     server_sock.server.stop()
+        #     break
         # server_sock.recv()
         # raise NotImplementedError
     #############################################################################
